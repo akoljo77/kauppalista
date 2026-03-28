@@ -279,6 +279,62 @@ document.getElementById("addBtn").addEventListener("click", addItem);
 
 render();
 </script>
+<!-- ✅ FIREBASE KOKO SOVELLUKSELLE -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
+import {
+  getFirestore, collection, addDoc, deleteDoc, doc,
+  onSnapshot, getDocs
+} from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDfXI1zwoyvcaV4HvqBBgqQQODNygiqckQ",
+  authDomain: "kauppalista-360b1.firebaseapp.com",
+  projectId: "kauppalista-360b1",
+  storageBucket: "kauppalista-360b1.firebasestorage.app",
+  messagingSenderId: "531600533067",
+  appId: "1:531600533067:web:036c40e5fdebeeca110fce"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+// ✅ 1) LUE PIKAPAINIKKEET FIRESTORESTA
+onSnapshot(collection(db, "pikapainikkeet"), (snapshot) => {
+  buttons = snapshot.docs.map(d => d.data().nimi);
+  renderButtons();
+});
+
+// ✅ 2) LUE OSTOSLISTA FIRESTORESTA
+onSnapshot(collection(db, "kauppalista"), (snapshot) => {
+  items = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+  renderList();
+});
+
+// ✅ 3) KORVAA VANHA addItem → tämä tallentaa Firestoreen
+window.addItem = async function () {
+  const input = document.getElementById("input");
+  const value = input.value.trim();
+  if (!value) return;
+
+  await addDoc(collection(db, "kauppalista"), { nimi: value });
+  input.value = "";
+};
+
+// ✅ 4) KORVAA removeItem → poistaa Firestoresta
+window.removeItem = async function (index) {
+  const item = items[index];
+  await deleteDoc(doc(db, "kauppalista", item.id));
+};
+
+// ✅ 5) TYHJENNÄ LISTA FIRESTORESTA
+document.getElementById("clearBtn").onclick = async () => {
+  if (!confirm("Tyhjennetäänkö koko lista?")) return;
+
+  const snap = await getDocs(collection(db, "kauppalista"));
+  snap.forEach(d => deleteDoc(doc(db, "kauppalista", d.id)));
+};
+</script>
 
 </body>
 </html>
