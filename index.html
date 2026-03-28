@@ -310,7 +310,36 @@ onSnapshot(collection(db, "kauppalista"), (snapshot) => {
   items = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
   renderList();
 });
+// ✅ FIREBASE TUONTI + ALUSTUS (TÄMÄ PUUTTUI)
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
+import {
+  getFirestore, collection, addDoc, deleteDoc, doc,
+  onSnapshot, getDocs
+} from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
 
+const firebaseConfig = {
+  apiKey: "AIzaSyDfXI1zwoyvcaV4HvqBBgqQQODNygiqckQ",
+  authDomain: "kauppalista-360b1.firebaseapp.com",
+  projectId: "kauppalista-360b1",
+  storageBucket: "kauppalista-360b1.firebasestorage.app",
+  messagingSenderId: "531600533067",
+  appId: "1:531600533067:web:036c40e5fdebeeca110fce"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+// ✅ 1) PIKAPAINIKKEET FIRESTORESTA
+onSnapshot(collection(db, "pikapainikkeet"), (snapshot) => {
+  buttons = snapshot.docs.map(d => d.data().nimi);
+  renderButtons();
+});
+
+// ✅ 2) OSTOSLISTA FIRESTORESTA
+onSnapshot(collection(db, "kauppalista"), (snapshot) => {
+  items = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+  renderList();
+});
 // ✅ 3) KORVAA VANHA addItem → tämä tallentaa Firestoreen
 window.addItem = async function () {
   const input = document.getElementById("input");
