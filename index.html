@@ -98,19 +98,17 @@ li{
 <button id="clearBtn" class="clearBtn">Tyhjennä lista</button>
 <ul id="list"></ul>
 
-<!-- ✅ KOKO SOVELLUS + FIREBASE -->
+
+<!-- ✅ FIREBASE + KOKO SOVELLUS -->
 <script type="module">
 
-/* -------------------------------
-   ✅ 1. FIREBASE ALUSTUS
-------------------------------- */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
 import {
   getFirestore, collection, addDoc, deleteDoc, doc,
   onSnapshot, getDocs
 } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
 
-// ✅ sinun Firestore-config
+// ✅ Firestore config (sinun projektistasi)
 const firebaseConfig = {
   apiKey: "AIzaSyDfXI1zwoyvcaV4HvqBBgqQQODNygiqckQ",
   authDomain: "kauppalista-360b1.firebaseapp.com",
@@ -123,37 +121,27 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-
-/* -------------------------------
-   ✅ 2. DATA-MUUTTUJAT
-------------------------------- */
+// ✅ Data
 let items = [];
 let buttons = [];
-let dragIndex;
 let openContent = null;
 
 
-/* -------------------------------
-   ✅ 3. PIKAPAINIKKEET FIRESTORESTA
-------------------------------- */
+/* ✅ PIKAPAINIKKEET (Firestore → UI) */
 onSnapshot(collection(db, "pikapainikkeet"), (snapshot) => {
   buttons = snapshot.docs.map(d => d.data().nimi);
   renderButtons();
 });
 
 
-/* -------------------------------
-   ✅ 4. OSTOSLISTA FIRESTORESTA
-------------------------------- */
+/* ✅ OSTOSLISTA (Firestore → UI) */
 onSnapshot(collection(db, "kauppalista"), (snapshot) => {
   items = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
   renderList();
 });
 
 
-/* -------------------------------
-   ✅ 5. RENDERÖINTI – PIKAPAINIKKEET
-------------------------------- */
+/* ✅ RENDERÖINTI – pikapainikkeet */
 function renderButtons(){
   let box = document.getElementById("buttons");
   box.innerHTML = "";
@@ -205,16 +193,13 @@ function renderButtons(){
 }
 
 
-/* -------------------------------
-   ✅ 6. RENDERÖINTI – OSTOSLISTA
-------------------------------- */
+/* ✅ RENDERÖINTI – ostoslista */
 function renderList(){
   let list = document.getElementById("list");
   list.innerHTML = "";
 
   items.forEach((item, index)=>{
     let li = document.createElement("li");
-    li.draggable = true;
 
     let text = document.createElement("span");
     text.innerText = item.nimi;
@@ -231,9 +216,7 @@ function renderList(){
 }
 
 
-/* -------------------------------
-   ✅ 7. FIRESTORE – LISÄYS
-------------------------------- */
+/* ✅ LISÄYS FIRESTOREEN */
 window.addItem = async function () {
   const input = document.getElementById("input");
   const value = input.value.trim();
@@ -248,18 +231,14 @@ window.addItemFromButton = async function (name) {
 };
 
 
-/* -------------------------------
-   ✅ 8. FIRESTORE – POISTO
-------------------------------- */
+/* ✅ POISTO FIRESTORESTA */
 window.removeItem = async function (index) {
   const item = items[index];
   await deleteDoc(doc(db, "kauppalista", item.id));
 };
 
 
-/* -------------------------------
-   ✅ 9. FIRESTORE – TYHJENNYS
-------------------------------- */
+/* ✅ TYHJENNÄ KOKO LISTA FIRESTORESTA */
 document.getElementById("clearBtn").onclick = async () => {
   if (!confirm("Tyhjennetäänkö koko lista?")) return;
 
@@ -271,3 +250,4 @@ document.getElementById("clearBtn").onclick = async () => {
 
 </body>
 </html>
+``
