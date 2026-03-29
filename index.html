@@ -13,11 +13,13 @@ body{
   background:#f2f2f2;
 }
 h1{text-align:center;}
+
 input{
   width:70%;
   padding:12px;
   font-size:18px;
 }
+
 button{
   padding:10px;
   margin:4px;
@@ -27,6 +29,7 @@ button{
   background:#2196F3;
   color:white;
 }
+
 .clearBtn{ background:#d9534f; }
 
 li{
@@ -37,6 +40,20 @@ li{
   border-radius:6px;
   display:flex;
   justify-content:space-between;
+  align-items:center;
+}
+
+.iconBtn{
+  background:white;
+  border:none;
+  padding:6px;
+  cursor:pointer;
+}
+
+.icon{
+  width:20px;
+  height:20px;
+  fill:#2196F3;
 }
 
 #suggestions{
@@ -66,7 +83,12 @@ li{
   border:2px solid #4CAF50;
   border-radius:8px;
 }
-.itemRow{margin:6px 0;}
+.itemRow{
+  margin:6px 0;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+}
 .itemBtn{
   background:white;
   color:black;
@@ -76,6 +98,8 @@ li{
   border-radius:10px;
 }
 .hidden{display:none;}
+
+.dragging{opacity:0.5;}
 </style>
 </head>
 
@@ -95,7 +119,6 @@ li{
 
 <script type="module">
 
-/* --- FIREBASE --- */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
 import {
   getFirestore, collection, addDoc, updateDoc,
@@ -105,80 +128,90 @@ import {
 const firebaseConfig = {
   apiKey: "AIzaSyDfXI1zwoyvcaV4HvqBBgqQQODNygiqckQ",
   authDomain: "kauppalista-360b1.firebaseapp.com",
-  projectId: "kauppalista-360b1",
-  storageBucket: "kauppalista-360b1.firebasestorage.app",
-  messagingSenderId: "531600533067",
-  appId: "1:531600533067:web:036c40e5fdebeeca110fce"
+  projectId: "kauppalista-360b1"
 };
 
 initializeApp(firebaseConfig);
 const db = getFirestore();
 
-/* DATA */
 let items = [];
 let buttons = [];
 let openContent = null;
 
-/* --- SNAPSHOT: pikapainikkeet --- */
-onSnapshot(collection(db, "pikapainikkeet"), (snap)=>{
-  buttons = snap.docs.map(d=>d.data().nimi);
+/* --- SVG ROSKAKORI --- */
+function trashIcon(){
+  return `
+  <svg class="icon" viewBox="0 0 24 24">
+    <path d="M3 6h18M8 6V4h8v2m-9 0l1 14h8l1-14"/>
+  </svg>`;
+}
+
+/* --- SNAPSHOT --- */
+onSnapshot(collection(db,"pikapainikkeet"), snap=>{
+  buttons = snap.docs.map(d=>({id:d.id,...d.data()}));
   renderButtons();
 });
 
-/* --- SNAPSHOT: ostoslista order-järjestyksessä --- */
-onSnapshot(collection(db, "kauppalista"), (snap)=>{
-  items = snap.docs.map(d=>({ id:d.id, ...d.data() }));
+onSnapshot(collection(db,"kauppalista"), snap=>{
+  items = snap.docs.map(d=>({id:d.id,...d.data()}));
   items.sort((a,b)=>(a.order??0)-(b.order??0));
   renderList();
 });
 
-/* --- ENTER lisää --- */
-document.getElementById("input").addEventListener("keypress", e=>{
-  if(e.key === "Enter") addItem();
+/* --- ENTER --- */
+input.addEventListener("keypress", e=>{
+  if(e.key==="Enter") addItem();
 });
 
-/* --- RENDER: pikapainikkeet --- */
+/* --- PIKAPAINIKKEET --- */
 function renderButtons(){
-  let box = document.getElementById("buttons");
-  box.innerHTML = "";
-  let groups = {};
+  let box=document.getElementById("buttons");
+  box.innerHTML="";
+  let groups={};
 
-  buttons.forEach(name=>{
-    const L = name.charAt(0).toUpperCase();
+  buttons.forEach(b=>{
+    let L=b.nimi.charAt(0).toUpperCase();
     if(!groups[L]) groups[L]=[];
-    groups[L].push(name);
+    groups[L].push(b);
   });
 
   Object.keys(groups).sort().forEach(letter=>{
-    let div = document.createElement("div");
-    div.className = "letterGroup";
+    let div=document.createElement("div");
+    div.className="letterGroup";
 
-    let header = document.createElement("button");
+    let header=document.createElement("button");
     header.className="letterHeader";
-    header.innerText = letter;
+    header.innerText=letter;
 
-    let content = document.createElement("div");
-    content.className="hidden contentArea"; // helpompi löytää myöhemmin
+    let content=document.createElement("div");
+    content.className="hidden";
 
-    header.onclick = ()=>{
+    header.onclick=()=>{
       if(openContent && openContent!==content){
         openContent.classList.add("hidden");
       }
       content.classList.toggle("hidden");
-      openContent = content.classList.contains("hidden") ? null : content;
+      openContent=content.classList.contains("hidden")?null:content;
     };
 
-    groups[letter].sort((a,b)=>a.localeCompare(b));
-    groups[letter].forEach(name=>{
+    groups[letter].sort((a,b)=>a.nimi.localeCompare(b.nimi));
+
+    groups[letter].forEach(obj=>{
       let row=document.createElement("div");
       row.className="itemRow";
 
-      let b=document.createElement("button");
-      b.className="itemBtn";
-      b.innerText=name;
-      b.onclick=()=>addItemFromButton(name, content);
+      let btn=document.createElement("button");
+      btn.className="itemBtn";
+      btn.innerText=obj.nimi;
+      btn.onclick=()=>addItemFromButton(obj.nimi, content);
 
-      row.appendChild(b);
+      let del=document.createElement("button");
+      del.className="iconBtn";
+      del.innerHTML=trashIcon();
+      del.onclick=()=>deleteQuickButton(obj.id);
+
+      row.appendChild(btn);
+      row.appendChild(del);
       content.appendChild(row);
     });
 
@@ -188,135 +221,150 @@ function renderButtons(){
   });
 }
 
-/* --- HAKUEHDOTUKSET --- */
-document.getElementById("input").addEventListener("input", ()=>{
-  let val = input.value.trim().toLowerCase();
-  let box = document.getElementById("suggestions");
-  box.innerHTML="";
+/* --- DRAG FIX --- */
+function addDragEvents(){
+  const list=document.getElementById("list");
+  let dragging=null;
 
-  if(val.length<3) return;
+  list.querySelectorAll("li").forEach(li=>{
+    li.addEventListener("dragstart", ()=>{
+      dragging=li;
+      li.classList.add("dragging");
+    });
 
-  let hits = buttons.filter(b=>b.toLowerCase().startsWith(val));
-  hits.forEach(m=>{
-    let d=document.createElement("div");
-    d.className="suggestion";
-    d.innerText=m;
-    d.onclick=()=>{ input.value=m; box.innerHTML=""; };
-    box.appendChild(d);
+    li.addEventListener("dragend", async ()=>{
+      li.classList.remove("dragging");
+
+      const newOrder=[...list.children];
+      for(let i=0;i<newOrder.length;i++){
+        const id=newOrder[i].dataset.id;
+        await updateDoc(doc(db,"kauppalista",id),{order:i});
+      }
+    });
   });
-});
 
-/* --- RENDER: ostoslista (ei aakkosittain!) --- */
+  list.addEventListener("dragover", e=>{
+    e.preventDefault();
+    const after=getDragAfterElement(list,e.clientY);
+    if(after==null){
+      list.appendChild(dragging); // 🔥 nyt toimii viimeiseksi
+    } else {
+      list.insertBefore(dragging,after);
+    }
+  });
+}
+
+function getDragAfterElement(container,y){
+  const els=[...container.querySelectorAll("li:not(.dragging)")];
+
+  return els.reduce((closest,child)=>{
+    const box=child.getBoundingClientRect();
+    const offset=y-box.top-box.height/2;
+
+    if(offset<0 && offset>closest.offset){
+      return {offset:offset, element:child};
+    } else {
+      return closest;
+    }
+  },{offset:Number.NEGATIVE_INFINITY}).element;
+}
+
+/* --- RENDER LISTA --- */
 function renderList(){
   let list=document.getElementById("list");
   list.innerHTML="";
 
-  items.forEach((item,i)=>{
+  items.forEach(item=>{
     let li=document.createElement("li");
     li.draggable=true;
+    li.dataset.id=item.id;
 
-    let t=document.createElement("span");
-    t.innerText=item.nimi;
+    let span=document.createElement("span");
+    span.innerText=item.nimi;
 
     let del=document.createElement("button");
-    del.innerText="🗑️";
-    del.onclick=()=>removeItem(i);
+    del.className="iconBtn";
+    del.innerHTML=trashIcon();
+    del.onclick=()=>deleteDoc(doc(db,"kauppalista",item.id));
 
-    li.appendChild(t);
+    li.appendChild(span);
     li.appendChild(del);
-
-    /* Drag-start */
-    li.addEventListener("dragstart", ()=>{
-      li.classList.add("dragging");
-    });
-
-    li.addEventListener("dragend", ()=>{
-      li.classList.remove("dragging");
-    });
-
-    /* reorder in UI */
-    li.addEventListener("dragover", e=>{
-      e.preventDefault();
-      const dragging=document.querySelector(".dragging");
-      if(dragging && dragging!==li){
-        list.insertBefore(dragging, li);
-      }
-    });
-
-    li.addEventListener("drop", async ()=>{
-      const elements=[...document.querySelectorAll("#list li")];
-      for(let idx=0; idx<elements.length; idx++){
-        const id = items.find(x=>x.nimi===elements[idx].innerText).id;
-        await updateDoc(doc(db,"kauppalista",id),{order:idx});
-      }
-    });
-
     list.appendChild(li);
   });
+
+  addDragEvents();
 }
 
-/* --- LISÄÄ TUOTE TEKSTIKENTÄSTÄ --- */
-window.addItem = async function(){
-  let input=document.getElementById("input");
+/* --- LISÄÄ --- */
+window.addItem = async ()=>{
   let value=input.value.trim();
   if(!value) return;
 
-  /* Duplikaattiesto */
   if(items.some(x=>x.nimi.toLowerCase()===value.toLowerCase())){
     alert("Tuote on jo listalla!");
-    input.value="";
     return;
   }
 
-  /* Lisää listaan aina viimeiseksi */
   await addDoc(collection(db,"kauppalista"),{
     nimi:value,
-    order: items.length
+    order:items.length
   });
 
-  /* Lisää pikapainike jos puuttuu */
-  if(!buttons.map(b=>b.toLowerCase()).includes(value.toLowerCase())){
+  if(!buttons.map(b=>b.nimi.toLowerCase()).includes(value.toLowerCase())){
     await addDoc(collection(db,"pikapainikkeet"),{nimi:value});
   }
 
   input.value="";
-  document.getElementById("suggestions").innerHTML="";
 };
 
-/* --- LISÄÄ TUOTE PIKAPAINIKKEESTA --- */
-window.addItemFromButton = async function(name, contentDiv){
-
-  /* duplikaattiesto */
+/* --- PIKAPAINIKE LISÄYS --- */
+window.addItemFromButton = async (name, contentDiv)=>{
   if(items.some(x=>x.nimi.toLowerCase()===name.toLowerCase())){
     alert("Tuote on jo listalla!");
-    input.value="";
     return;
   }
 
-  /* Lisää listaan aina viimeiseksi */
   await addDoc(collection(db,"kauppalista"),{
     nimi:name,
-    order: items.length
+    order:items.length
   });
 
-  /* ✅ Sulje juuri painetun kirjaimen valikko */
   if(contentDiv){
     contentDiv.classList.add("hidden");
     openContent=null;
   }
 };
 
-/* --- POISTA TUOTE --- */
-window.removeItem = async function(i){
-  await deleteDoc(doc(db,"kauppalista",items[i].id));
+/* --- POISTA PIKAPAINIKE --- */
+window.deleteQuickButton = async (id)=>{
+  await deleteDoc(doc(db,"pikapainikkeet",id));
 };
 
-/* --- TYHJENNÄ KOKO LISTA --- */
-document.getElementById("clearBtn").onclick = async ()=>{
-  if(!confirm("Tyhjennetäänkö koko lista?")) return;
+/* --- TYHJENNÄ --- */
+clearBtn.onclick=async ()=>{
+  if(!confirm("Tyhjennetäänkö lista?")) return;
   const snap=await getDocs(collection(db,"kauppalista"));
   snap.forEach(d=>deleteDoc(doc(db,"kauppalista",d.id)));
 };
+
+/* --- HAKU --- */
+input.addEventListener("input",()=>{
+  let val=input.value.toLowerCase();
+  let box=document.getElementById("suggestions");
+  box.innerHTML="";
+
+  if(val.length<3) return;
+
+  buttons
+    .filter(b=>b.nimi.toLowerCase().startsWith(val))
+    .forEach(m=>{
+      let d=document.createElement("div");
+      d.className="suggestion";
+      d.innerText=m.nimi;
+      d.onclick=()=>{ input.value=m.nimi; box.innerHTML=""; };
+      box.appendChild(d);
+    });
+});
 
 </script>
 
