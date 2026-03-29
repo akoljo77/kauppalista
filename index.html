@@ -53,7 +53,9 @@ li{
 .icon{
   width:20px;
   height:20px;
-  fill:#2196F3;
+  stroke:#2196F3;
+  stroke-width:3;
+  fill:none;
 }
 
 #suggestions{
@@ -98,7 +100,6 @@ li{
   border-radius:10px;
 }
 .hidden{display:none;}
-
 .dragging{opacity:0.5;}
 </style>
 </head>
@@ -138,11 +139,12 @@ let items = [];
 let buttons = [];
 let openContent = null;
 
-/* --- SVG ROSKAKORI --- */
-function trashIcon(){
+/* 🔵 SININEN RASTI */
+function crossIcon(){
   return `
   <svg class="icon" viewBox="0 0 24 24">
-    <path d="M3 6h18M8 6V4h8v2m-9 0l1 14h8l1-14"/>
+    <line x1="5" y1="5" x2="19" y2="19"/>
+    <line x1="19" y1="5" x2="5" y2="19"/>
   </svg>`;
 }
 
@@ -207,7 +209,7 @@ function renderButtons(){
 
       let del=document.createElement("button");
       del.className="iconBtn";
-      del.innerHTML=trashIcon();
+      del.innerHTML=crossIcon();
       del.onclick=()=>deleteQuickButton(obj.id);
 
       row.appendChild(btn);
@@ -221,7 +223,7 @@ function renderButtons(){
   });
 }
 
-/* --- DRAG FIX --- */
+/* --- DRAG --- */
 function addDragEvents(){
   const list=document.getElementById("list");
   let dragging=null;
@@ -247,7 +249,7 @@ function addDragEvents(){
     e.preventDefault();
     const after=getDragAfterElement(list,e.clientY);
     if(after==null){
-      list.appendChild(dragging); // 🔥 nyt toimii viimeiseksi
+      list.appendChild(dragging);
     } else {
       list.insertBefore(dragging,after);
     }
@@ -284,7 +286,7 @@ function renderList(){
 
     let del=document.createElement("button");
     del.className="iconBtn";
-    del.innerHTML=trashIcon();
+    del.innerHTML=crossIcon();
     del.onclick=()=>deleteDoc(doc(db,"kauppalista",item.id));
 
     li.appendChild(span);
@@ -302,6 +304,7 @@ window.addItem = async ()=>{
 
   if(items.some(x=>x.nimi.toLowerCase()===value.toLowerCase())){
     alert("Tuote on jo listalla!");
+    input.value=""; // 🔥 tyhjennys lisätty
     return;
   }
 
@@ -321,6 +324,7 @@ window.addItem = async ()=>{
 window.addItemFromButton = async (name, contentDiv)=>{
   if(items.some(x=>x.nimi.toLowerCase()===name.toLowerCase())){
     alert("Tuote on jo listalla!");
+    input.value=""; // 🔥 tyhjennys myös täällä
     return;
   }
 
