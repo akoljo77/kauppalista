@@ -66,9 +66,8 @@ li{
   border:2px solid #4CAF50;
   border-radius:8px;
 }
-.itemRow{display:block; margin:6px 0;}
+.itemRow{margin:6px 0;}
 .itemBtn{
-  display:inline-block;
   background:white;
   color:black;
   font-size:20px;
@@ -96,7 +95,7 @@ li{
 
 <script type="module">
 
-/* FIREBASE */
+/* --- FIREBASE --- */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
 import {
   getFirestore, collection, addDoc, updateDoc,
@@ -112,63 +111,57 @@ const firebaseConfig = {
   appId: "1:531600533067:web:036c40e5fdebeeca110fce"
 };
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+initializeApp(firebaseConfig);
+const db = getFirestore();
 
 /* DATA */
 let items = [];
 let buttons = [];
 let openContent = null;
 
-/* SNAPSHOT — PIKAPAINIKKEET */
-onSnapshot(collection(db, "pikapainikkeet"), (snapshot) => {
-  buttons = snapshot.docs.map(d => d.data().nimi);
+/* --- SNAPSHOT: pikapainikkeet --- */
+onSnapshot(collection(db, "pikapainikkeet"), (snap)=>{
+  buttons = snap.docs.map(d=>d.data().nimi);
   renderButtons();
 });
 
-/* SNAPSHOT — OSTOSLISTA */
-onSnapshot(collection(db, "kauppalista"), (snapshot) => {
-
-  items = snapshot.docs.map(d => ({
-    id: d.id,
-    ...d.data()
-  }));
-
-  items.sort((a,b)=> (a.order ?? 0) - (b.order ?? 0));
-
+/* --- SNAPSHOT: ostoslista order-järjestyksessä --- */
+onSnapshot(collection(db, "kauppalista"), (snap)=>{
+  items = snap.docs.map(d=>({ id:d.id, ...d.data() }));
+  items.sort((a,b)=>(a.order??0)-(b.order??0));
   renderList();
 });
 
-/* ENTER → Lisää */
-document.getElementById("input").addEventListener("keypress", function(e){
-  if(e.key === "Enter"){ addItem(); }
+/* --- ENTER lisää --- */
+document.getElementById("input").addEventListener("keypress", e=>{
+  if(e.key === "Enter") addItem();
 });
 
-
-/* ✅ RENDERÖI PIKAPAINIKKEET AAKKOSVALIKOIKSI */
+/* --- RENDER: pikapainikkeet --- */
 function renderButtons(){
   let box = document.getElementById("buttons");
   box.innerHTML = "";
   let groups = {};
 
   buttons.forEach(name=>{
-    const letter = name.charAt(0).toUpperCase();
-    if(!groups[letter]) groups[letter] = [];
-    groups[letter].push(name);
+    const L = name.charAt(0).toUpperCase();
+    if(!groups[L]) groups[L]=[];
+    groups[L].push(name);
   });
 
   Object.keys(groups).sort().forEach(letter=>{
-    let groupDiv = document.createElement("div");
+    let div = document.createElement("div");
+    div.className = "letterGroup";
 
-    const header = document.createElement("button");
+    let header = document.createElement("button");
+    header.className="letterHeader";
     header.innerText = letter;
-    header.className = "letterHeader";
 
-    const content = document.createElement("div");
-    content.className = "hidden";
+    let content = document.createElement("div");
+    content.className="hidden contentArea"; // helpompi löytää myöhemmin
 
     header.onclick = ()=>{
-      if(openContent && openContent !== content){
+      if(openContent && openContent!==content){
         openContent.classList.add("hidden");
       }
       content.classList.toggle("hidden");
@@ -176,88 +169,85 @@ function renderButtons(){
     };
 
     groups[letter].sort((a,b)=>a.localeCompare(b));
-
     groups[letter].forEach(name=>{
-      let row = document.createElement("div");
-      row.className = "itemRow";
+      let row=document.createElement("div");
+      row.className="itemRow";
 
-      let b = document.createElement("button");
-      b.innerText = name;
-      b.className = "itemBtn";
-      b.onclick = ()=>addItemFromButton(name);
+      let b=document.createElement("button");
+      b.className="itemBtn";
+      b.innerText=name;
+      b.onclick=()=>addItemFromButton(name, content);
 
       row.appendChild(b);
       content.appendChild(row);
     });
 
-    groupDiv.appendChild(header);
-    groupDiv.appendChild(content);
-    box.appendChild(groupDiv);
+    div.appendChild(header);
+    div.appendChild(content);
+    box.appendChild(div);
   });
 }
 
-
-/* ✅ HAKUEHDOTUKSET */
+/* --- HAKUEHDOTUKSET --- */
 document.getElementById("input").addEventListener("input", ()=>{
-  let text = document.getElementById("input").value.trim().toLowerCase();
+  let val = input.value.trim().toLowerCase();
   let box = document.getElementById("suggestions");
-  box.innerHTML = "";
+  box.innerHTML="";
 
-  if(text.length < 3) return;
+  if(val.length<3) return;
 
-  let matches = buttons.filter(b => 
-    b.toLowerCase().startsWith(text)
-  );
-
-  matches.forEach(m=>{
-    let div = document.createElement("div");
-    div.className = "suggestion";
-    div.innerText = m;
-    div.onclick = ()=>{
-      document.getElementById("input").value = m;
-      box.innerHTML = "";
-    };
-    box.appendChild(div);
+  let hits = buttons.filter(b=>b.toLowerCase().startsWith(val));
+  hits.forEach(m=>{
+    let d=document.createElement("div");
+    d.className="suggestion";
+    d.innerText=m;
+    d.onclick=()=>{ input.value=m; box.innerHTML=""; };
+    box.appendChild(d);
   });
 });
 
-
-/* ✅ OSTOSLISTA (EI AAKKOSJÄRJESTYSTÄ) */
+/* --- RENDER: ostoslista (ei aakkosittain!) --- */
 function renderList(){
-  let list = document.getElementById("list");
-  list.innerHTML = "";
+  let list=document.getElementById("list");
+  list.innerHTML="";
 
-  items.forEach((item, index)=>{
-    let li = document.createElement("li");
-    li.draggable = true;
+  items.forEach((item,i)=>{
+    let li=document.createElement("li");
+    li.draggable=true;
 
-    let text = document.createElement("span");
-    text.innerText = item.nimi;
+    let t=document.createElement("span");
+    t.innerText=item.nimi;
 
-    let remove = document.createElement("button");
-    remove.innerText = "🗑️";
-    remove.onclick = ()=>removeItem(index);
+    let del=document.createElement("button");
+    del.innerText="🗑️";
+    del.onclick=()=>removeItem(i);
 
-    li.appendChild(text);
-    li.appendChild(remove);
+    li.appendChild(t);
+    li.appendChild(del);
 
-    /* DRAG & DROP – talletus Firestoreen */
-    li.addEventListener("dragstart", ()=> li.classList.add("dragging"));
-    li.addEventListener("dragend", ()=> li.classList.remove("dragging"));
+    /* Drag-start */
+    li.addEventListener("dragstart", ()=>{
+      li.classList.add("dragging");
+    });
+
+    li.addEventListener("dragend", ()=>{
+      li.classList.remove("dragging");
+    });
+
+    /* reorder in UI */
     li.addEventListener("dragover", e=>{
       e.preventDefault();
-      let dragging = document.querySelector(".dragging");
-      if (dragging && dragging !== li) {
+      const dragging=document.querySelector(".dragging");
+      if(dragging && dragging!==li){
         list.insertBefore(dragging, li);
       }
     });
 
     li.addEventListener("drop", async ()=>{
-      let newOrder = [...document.querySelectorAll("#list li")].map((el,i)=>{
-        return { id: items[i].id, order:i };
-      });
-      for (let o of newOrder) {
-        await updateDoc(doc(db,"kauppalista",o.id), { order:o.order });
+      const elements=[...document.querySelectorAll("#list li")];
+      for(let idx=0; idx<elements.length; idx++){
+        const id = items.find(x=>x.nimi===elements[idx].innerText).id;
+        await updateDoc(doc(db,"kauppalista",id),{order:idx});
       }
     });
 
@@ -265,85 +255,67 @@ function renderList(){
   });
 }
 
+/* --- LISÄÄ TUOTE TEKSTIKENTÄSTÄ --- */
+window.addItem = async function(){
+  let input=document.getElementById("input");
+  let value=input.value.trim();
+  if(!value) return;
 
-/* ✅ LISÄÄ TUOTE */
-window.addItem = async function () {
-  const input = document.getElementById("input");
-  const value = input.value.trim();
-  if (!value) return;
-
-  const exists = items.some(i => 
-    i.nimi.toLowerCase() === value.toLowerCase()
-  );
-  if (exists) {
+  /* Duplikaattiesto */
+  if(items.some(x=>x.nimi.toLowerCase()===value.toLowerCase())){
     alert("Tuote on jo listalla!");
-    input.value = "";
+    input.value="";
     return;
   }
 
-  await addDoc(collection(db, "kauppalista"), { 
-    nimi: value,
+  /* Lisää listaan aina viimeiseksi */
+  await addDoc(collection(db,"kauppalista"),{
+    nimi:value,
     order: items.length
   });
 
-  const existsBtn = buttons.map(b => b.toLowerCase())
-                           .includes(value.toLowerCase());
-  if (!existsBtn) {
-    await addDoc(collection(db, "pikapainikkeet"), { nimi:value });
+  /* Lisää pikapainike jos puuttuu */
+  if(!buttons.map(b=>b.toLowerCase()).includes(value.toLowerCase())){
+    await addDoc(collection(db,"pikapainikkeet"),{nimi:value});
   }
 
-  input.value = "";
-  document.getElementById("suggestions").innerHTML = "";
+  input.value="";
+  document.getElementById("suggestions").innerHTML="";
 };
 
+/* --- LISÄÄ TUOTE PIKAPAINIKKEESTA --- */
+window.addItemFromButton = async function(name, contentDiv){
 
-/* ✅ LISÄYS PIKAPAINIKKEESTA (UUSI LOGIIKKA!) */
-window.addItemFromButton = async function (name) {
-
-  const letter = name.charAt(0).toUpperCase();
-
-  let pressedContent = null;
-  document.querySelectorAll(".letterGroup").forEach(g=>{
-    if (g.querySelector(".letterHeader").innerText === letter){
-      pressedContent = g.querySelector("div");
-    }
-  });
-
-  const exists = items.some(i =>
-    i.nimi.toLowerCase() === name.toLowerCase()
-  );
-
-  if (exists) {
+  /* duplikaattiesto */
+  if(items.some(x=>x.nimi.toLowerCase()===name.toLowerCase())){
     alert("Tuote on jo listalla!");
-    document.getElementById("input").value = "";
+    input.value="";
     return;
   }
 
-  await addDoc(collection(db,"kauppalista"), { 
+  /* Lisää listaan aina viimeiseksi */
+  await addDoc(collection(db,"kauppalista"),{
     nimi:name,
     order: items.length
   });
 
-  /* ✅ SULJE JUURI PAINETTU VALIKKO */
-  if (pressedContent) {
-    pressedContent.classList.add("hidden");
-    openContent = null;
+  /* ✅ Sulje juuri painetun kirjaimen valikko */
+  if(contentDiv){
+    contentDiv.classList.add("hidden");
+    openContent=null;
   }
 };
 
-
-/* ✅ POISTA */
-window.removeItem = async function (index) {
-  const item = items[index];
-  await deleteDoc(doc(db, "kauppalista", item.id));
+/* --- POISTA TUOTE --- */
+window.removeItem = async function(i){
+  await deleteDoc(doc(db,"kauppalista",items[i].id));
 };
 
-
-/* ✅ TYHJENNÄ LISTA */
-document.getElementById("clearBtn").onclick = async () => {
-  if (!confirm("Tyhjennetäänkö koko lista?")) return;
-  const snap = await getDocs(collection(db, "kauppalista"));
-  snap.forEach(d => deleteDoc(doc(db, "kauppalista", d.id)));
+/* --- TYHJENNÄ KOKO LISTA --- */
+document.getElementById("clearBtn").onclick = async ()=>{
+  if(!confirm("Tyhjennetäänkö koko lista?")) return;
+  const snap=await getDocs(collection(db,"kauppalista"));
+  snap.forEach(d=>deleteDoc(doc(db,"kauppalista",d.id)));
 };
 
 </script>
