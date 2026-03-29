@@ -13,11 +13,13 @@ body{
   background:#f2f2f2;
 }
 h1{text-align:center;}
+
 input{
   width:70%;
   padding:12px;
   font-size:18px;
 }
+
 button{
   padding:10px;
   margin:4px;
@@ -27,6 +29,7 @@ button{
   background:#2196F3;
   color:white;
 }
+
 .clearBtn{ background:#d9534f; }
 
 li{
@@ -37,6 +40,11 @@ li{
   border-radius:6px;
   display:flex;
   justify-content:space-between;
+  cursor:grab;
+}
+
+.dragging{
+  opacity:0.5;
 }
 
 #suggestions{
@@ -46,37 +54,22 @@ li{
   max-height:150px;
   overflow:auto;
 }
+
 .suggestion{
   padding:10px;
-  font-size:18px;
   cursor:pointer;
-  border-bottom:1px solid #eee;
 }
-.suggestion:hover{ background:#e8f0fe; }
+
+.suggestion:hover{ background:#eee; }
 
 #buttons{display:flex; flex-wrap:wrap;}
-.letterGroup{margin:4px;}
-.letterHeader{
-  background:white;
-  color:black;
-  font-weight:bold;
-  width:70px;
-  height:50px;
-  font-size:22px;
-  border:2px solid #4CAF50;
-  border-radius:8px;
-}
-.itemRow{display:block; margin:6px 0;}
+
 .itemBtn{
-  display:inline-block;
+  margin:4px;
   background:white;
   color:black;
-  font-size:20px;
-  padding:10px 14px;
   border:2px solid #2196F3;
-  border-radius:10px;
 }
-.hidden{display:none;}
 </style>
 </head>
 
@@ -90,202 +83,215 @@ li{
 <div id="suggestions"></div>
 <div id="buttons"></div>
 
-<h3>Ostettavat</h3>
-<button id="clearBtn" class="clearBtn">Tyhjennä lista</button>
+<h3>Ostettavat (raahaa järjestykseen)</h3>
+<button class="clearBtn" onclick="clearAll()">Tyhjennä</button>
+
 <ul id="list"></ul>
 
 <script type="module">
 
-/* 🔥 FIREBASE */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
 import {
   getFirestore, collection, addDoc, deleteDoc, doc,
-  onSnapshot, getDocs
+  onSnapshot, getDocs, updateDoc
 } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDfXI1zwoyvcaV4HvqBBgqQQODNygiqckQ",
   authDomain: "kauppalista-360b1.firebaseapp.com",
-  projectId: "kauppalista-360b1",
-  storageBucket: "kauppalista-360b1.firebasestorage.app",
-  messagingSenderId: "531600533067",
-  appId: "1:531600533067:web:036c40e5fdebeeca110fce"
+  projectId: "kauppalista-360b1"
 };
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-/* DATA */
 let items = [];
 let buttons = [];
-let openContent = null;
 
-/* 🔥 PIKAPAINIKKEET */
-onSnapshot(collection(db, "pikapainikkeet"), (snapshot) => {
-  buttons = snapshot.docs.map(d => d.data().nimi);
-  renderButtons();
-});
+/* 🔥 DATA */
+onSnapshot(collection(db, "kauppalista"), (snap)=>{
+  items = snap.docs.map(d=>({id:d.id,...d.data()}));
 
-/* 🔥 OSTOSLISTA */
-onSnapshot(collection(db, "kauppalista"), (snapshot) => {
-  items = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-
-  // ✅ TÄRKEÄ: lajittelu TÄÄLLÄ
-  items.sort((a,b)=>a.nimi.localeCompare(b.nimi));
+  // Järjestys kentän mukaan
+  items.sort((a,b)=>a.order - b.order);
 
   renderList();
 });
 
-/* 🔥 ENTER = LISÄÄ */
-document.getElementById("input").addEventListener("keypress", function(e){
-  if(e.key === "Enter"){
-    addItem();
-  }
+onSnapshot(collection(db, "pikapainikkeet"), (snap)=>{
+  buttons = snap.docs.map(d=>d.data().nimi);
+  renderButtons();
 });
-
-/* 🔥 PIKAPAINIKKEET UI */
-function renderButtons(){
-  let box = document.getElementById("buttons");
-  box.innerHTML = "";
-  let groups = {};
-
-  buttons.forEach(name=>{
-    let letter = name.charAt(0).toUpperCase();
-    if(!groups[letter]) groups[letter] = [];
-    groups[letter].push(name);
-  });
-
-  Object.keys(groups).sort().forEach(letter=>{
-    let groupDiv = document.createElement("div");
-    groupDiv.className = "letterGroup";
-
-    let header = document.createElement("button");
-    header.innerText = letter;
-    header.className = "letterHeader";
-
-    let content = document.createElement("div");
-    content.className = "hidden";
-
-    header.onclick = ()=>{
-      if(openContent && openContent !== content){
-        openContent.classList.add("hidden");
-      }
-      content.classList.toggle("hidden");
-      openContent = content.classList.contains("hidden") ? null : content;
-    };
-
-    groups[letter].sort((a,b)=>a.localeCompare(b));
-
-    groups[letter].forEach(name=>{
-      let row = document.createElement("div");
-      row.className = "itemRow";
-
-      let b = document.createElement("button");
-      b.innerText = name;
-      b.className = "itemBtn";
-      b.onclick = ()=>addItemFromButton(name);
-
-      row.appendChild(b);
-      content.appendChild(row);
-    });
-
-    groupDiv.appendChild(header);
-    groupDiv.appendChild(content);
-    box.appendChild(groupDiv);
-  });
-}
-
-/* 🔥 HAKUEHDOTUKSET */
-document.getElementById("input").addEventListener("input", ()=>{
-  let text = document.getElementById("input").value.trim().toLowerCase();
-  let box = document.getElementById("suggestions");
-  box.innerHTML = "";
-
-  if(text.length < 3) return;
-
-  let matches = buttons.filter(b => 
-    b.toLowerCase().startsWith(text)
-  );
-
-  matches.forEach(m=>{
-    let div = document.createElement("div");
-    div.className = "suggestion";
-    div.innerText = m;
-    div.onclick = ()=>{
-      document.getElementById("input").value = m;
-      box.innerHTML = "";
-    };
-    box.appendChild(div);
-  });
-});
-
-/* 🔥 RENDER LISTA */
-function renderList(){
-  let list = document.getElementById("list");
-  list.innerHTML = "";
-
-  items.forEach((item, index)=>{
-    let li = document.createElement("li");
-
-    let text = document.createElement("span");
-    text.innerText = item.nimi;
-
-    let remove = document.createElement("button");
-    remove.innerText = "🗑️";
-    remove.onclick = ()=>removeItem(index);
-
-    li.appendChild(text);
-    li.appendChild(remove);
-
-    list.appendChild(li);
-  });
-}
 
 /* 🔥 LISÄÄ */
-window.addItem = async function () {
+window.addItem = async ()=>{
   const input = document.getElementById("input");
   const value = input.value.trim();
-  if (!value) return;
+  if(!value) return;
 
-  // ❗ estä tuplat
-  const exists = items.some(i => 
-    i.nimi.toLowerCase() === value.toLowerCase()
-  );
-  if (exists) {
-    alert("Tuote on jo listalla!");
+  // ❌ estä tuplat
+  if(items.some(i=>i.nimi.toLowerCase()===value.toLowerCase())){
+    alert("On jo listalla");
     return;
   }
 
-  await addDoc(collection(db, "kauppalista"), { nimi: value });
+  const order = items.length;
 
-  const existsBtn = buttons.map(b => b.toLowerCase())
-                           .includes(value.toLowerCase());
+  await addDoc(collection(db,"kauppalista"),{
+    nimi:value,
+    order:order
+  });
 
-  if (!existsBtn) {
-    await addDoc(collection(db, "pikapainikkeet"), { nimi: value });
+  if(!buttons.map(b=>b.toLowerCase()).includes(value.toLowerCase())){
+    await addDoc(collection(db,"pikapainikkeet"),{nimi:value});
   }
 
-  input.value = "";
-  document.getElementById("suggestions").innerHTML = "";
+  input.value="";
 };
 
-/* 🔥 LISÄÄ PIKAPAINIKKEESTA */
-window.addItemFromButton = async function (name) {
-  await addDoc(collection(db, "kauppalista"), { nimi: name });
+/* 🔥 PIKAPAINIKE LISÄYS */
+window.addItemFromButton = async (name)=>{
+
+  // ❌ estä tuplat myös täällä
+  if(items.some(i=>i.nimi.toLowerCase()===name.toLowerCase())){
+    alert("On jo listalla");
+    return;
+  }
+
+  const order = items.length;
+
+  await addDoc(collection(db,"kauppalista"),{
+    nimi:name,
+    order:order
+  });
 };
 
 /* 🔥 POISTA */
-window.removeItem = async function (index) {
-  const item = items[index];
-  await deleteDoc(doc(db, "kauppalista", item.id));
+window.removeItem = async (id)=>{
+  await deleteDoc(doc(db,"kauppalista",id));
 };
 
 /* 🔥 TYHJENNÄ */
-document.getElementById("clearBtn").onclick = async () => {
-  if (!confirm("Tyhjennetäänkö koko lista?")) return;
-  const snap = await getDocs(collection(db, "kauppalista"));
-  snap.forEach(d => deleteDoc(doc(db, "kauppalista", d.id)));
+window.clearAll = async ()=>{
+  if(!confirm("Tyhjennetäänkö lista?")) return;
+  const snap = await getDocs(collection(db,"kauppalista"));
+  snap.forEach(d=>deleteDoc(doc(db,"kauppalista",d.id)));
 };
+
+/* 🔥 RENDER */
+function renderList(){
+  const list = document.getElementById("list");
+  list.innerHTML="";
+
+  items.forEach(item=>{
+    const li = document.createElement("li");
+    li.draggable=true;
+    li.dataset.id=item.id;
+
+    li.innerHTML = `
+      <span>${item.nimi}</span>
+      <button onclick="removeItem('${item.id}')">🗑️</button>
+    `;
+
+    list.appendChild(li);
+  });
+
+  addDragEvents();
+}
+
+/* 🔥 DRAG & DROP */
+function addDragEvents(){
+  const list = document.getElementById("list");
+  let dragging;
+
+  list.querySelectorAll("li").forEach(li=>{
+    li.addEventListener("dragstart", ()=>{
+      dragging = li;
+      li.classList.add("dragging");
+    });
+
+    li.addEventListener("dragend", async ()=>{
+      li.classList.remove("dragging");
+
+      // päivitä järjestys firebaseen
+      const newOrder = [...list.children];
+      for(let i=0;i<newOrder.length;i++){
+        const id = newOrder[i].dataset.id;
+        await updateDoc(doc(db,"kauppalista",id),{
+          order:i
+        });
+      }
+    });
+  });
+
+  list.addEventListener("dragover", e=>{
+    e.preventDefault();
+    const after = getDragAfterElement(list, e.clientY);
+    if(after==null){
+      list.appendChild(dragging);
+    } else {
+      list.insertBefore(dragging, after);
+    }
+  });
+}
+
+function getDragAfterElement(container, y){
+  const els = [...container.querySelectorAll("li:not(.dragging)")];
+
+  return els.reduce((closest, child)=>{
+    const box = child.getBoundingClientRect();
+    const offset = y - box.top - box.height/2;
+
+    if(offset < 0 && offset > closest.offset){
+      return {offset:offset, element:child};
+    } else {
+      return closest;
+    }
+  }, {offset:Number.NEGATIVE_INFINITY}).element;
+}
+
+/* 🔥 PIKAPAINIKKEET */
+function renderButtons(){
+  const box = document.getElementById("buttons");
+  box.innerHTML="";
+
+  buttons.sort((a,b)=>a.localeCompare(b));
+
+  buttons.forEach(name=>{
+    const b = document.createElement("button");
+    b.innerText=name;
+    b.className="itemBtn";
+    b.onclick=()=>addItemFromButton(name);
+    box.appendChild(b);
+  });
+}
+
+/* 🔥 ENTER */
+document.getElementById("input").addEventListener("keypress",(e)=>{
+  if(e.key==="Enter") addItem();
+});
+
+/* 🔥 EHDOTUKSET */
+document.getElementById("input").addEventListener("input",()=>{
+  const text = document.getElementById("input").value.toLowerCase();
+  const box = document.getElementById("suggestions");
+  box.innerHTML="";
+
+  if(text.length<3) return;
+
+  buttons
+    .filter(b=>b.toLowerCase().startsWith(text))
+    .forEach(m=>{
+      const div = document.createElement("div");
+      div.className="suggestion";
+      div.innerText=m;
+      div.onclick=()=>{
+        document.getElementById("input").value=m;
+        box.innerHTML="";
+      };
+      box.appendChild(div);
+    });
+});
 
 </script>
 
