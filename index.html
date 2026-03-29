@@ -101,6 +101,11 @@ li{
 }
 .hidden{display:none;}
 .dragging{opacity:0.5;}
+
+/* 🔥 DROP-ALUE LISTAN LOPPUUN */
+#dropEnd{
+  height:40px;
+}
 </style>
 </head>
 
@@ -117,6 +122,7 @@ li{
 <h3>Ostettavat</h3>
 <button id="clearBtn" class="clearBtn">Tyhjennä lista</button>
 <ul id="list"></ul>
+<div id="dropEnd"></div>
 
 <script type="module">
 
@@ -139,7 +145,7 @@ let items = [];
 let buttons = [];
 let openContent = null;
 
-/* 🔵 SININEN RASTI */
+/* 🔵 RASTI */
 function crossIcon(){
   return `
   <svg class="icon" viewBox="0 0 24 24">
@@ -165,62 +171,10 @@ input.addEventListener("keypress", e=>{
   if(e.key==="Enter") addItem();
 });
 
-/* --- PIKAPAINIKKEET --- */
-function renderButtons(){
-  let box=document.getElementById("buttons");
-  box.innerHTML="";
-  let groups={};
-
-  buttons.forEach(b=>{
-    let L=b.nimi.charAt(0).toUpperCase();
-    if(!groups[L]) groups[L]=[];
-    groups[L].push(b);
-  });
-
-  Object.keys(groups).sort().forEach(letter=>{
-    let div=document.createElement("div");
-    div.className="letterGroup";
-
-    let header=document.createElement("button");
-    header.className="letterHeader";
-    header.innerText=letter;
-
-    let content=document.createElement("div");
-    content.className="hidden";
-
-    header.onclick=()=>{
-      if(openContent && openContent!==content){
-        openContent.classList.add("hidden");
-      }
-      content.classList.toggle("hidden");
-      openContent=content.classList.contains("hidden")?null:content;
-    };
-
-    groups[letter].sort((a,b)=>a.nimi.localeCompare(b.nimi));
-
-    groups[letter].forEach(obj=>{
-      let row=document.createElement("div");
-      row.className="itemRow";
-
-      let btn=document.createElement("button");
-      btn.className="itemBtn";
-      btn.innerText=obj.nimi;
-      btn.onclick=()=>addItemFromButton(obj.nimi, content);
-
-      let del=document.createElement("button");
-      del.className="iconBtn";
-      del.innerHTML=crossIcon();
-      del.onclick=()=>deleteQuickButton(obj.id);
-
-      row.appendChild(btn);
-      row.appendChild(del);
-      content.appendChild(row);
-    });
-
-    div.appendChild(header);
-    div.appendChild(content);
-    box.appendChild(div);
-  });
+/* --- 🔥 HAE SUURIN ORDER --- */
+function getNextOrder(){
+  if(items.length===0) return 0;
+  return Math.max(...items.map(i=>i.order ?? 0)) + 1;
 }
 
 /* --- DRAG --- */
@@ -252,6 +206,14 @@ function addDragEvents(){
       list.appendChild(dragging);
     } else {
       list.insertBefore(dragging,after);
+    }
+  });
+
+  /* 🔥 DROP LOPPUUN */
+  document.getElementById("dropEnd").addEventListener("dragover", e=>{
+    e.preventDefault();
+    if(dragging){
+      list.appendChild(dragging);
     }
   });
 }
@@ -304,13 +266,13 @@ window.addItem = async ()=>{
 
   if(items.some(x=>x.nimi.toLowerCase()===value.toLowerCase())){
     alert("Tuote on jo listalla!");
-    input.value=""; // 🔥 tyhjennys lisätty
+    input.value="";
     return;
   }
 
   await addDoc(collection(db,"kauppalista"),{
     nimi:value,
-    order:items.length
+    order:getNextOrder() // 🔥 korjaus
   });
 
   if(!buttons.map(b=>b.nimi.toLowerCase()).includes(value.toLowerCase())){
@@ -324,13 +286,13 @@ window.addItem = async ()=>{
 window.addItemFromButton = async (name, contentDiv)=>{
   if(items.some(x=>x.nimi.toLowerCase()===name.toLowerCase())){
     alert("Tuote on jo listalla!");
-    input.value=""; // 🔥 tyhjennys myös täällä
+    input.value="";
     return;
   }
 
   await addDoc(collection(db,"kauppalista"),{
     nimi:name,
-    order:items.length
+    order:getNextOrder() // 🔥 korjaus
   });
 
   if(contentDiv){
@@ -350,25 +312,6 @@ clearBtn.onclick=async ()=>{
   const snap=await getDocs(collection(db,"kauppalista"));
   snap.forEach(d=>deleteDoc(doc(db,"kauppalista",d.id)));
 };
-
-/* --- HAKU --- */
-input.addEventListener("input",()=>{
-  let val=input.value.toLowerCase();
-  let box=document.getElementById("suggestions");
-  box.innerHTML="";
-
-  if(val.length<3) return;
-
-  buttons
-    .filter(b=>b.nimi.toLowerCase().startsWith(val))
-    .forEach(m=>{
-      let d=document.createElement("div");
-      d.className="suggestion";
-      d.innerText=m.nimi;
-      d.onclick=()=>{ input.value=m.nimi; box.innerHTML=""; };
-      box.appendChild(d);
-    });
-});
 
 </script>
 
