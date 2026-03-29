@@ -65,16 +65,25 @@ li{
   max-height:150px;
   overflow:auto;
 }
+
 .suggestion{
   padding:10px;
   font-size:18px;
   cursor:pointer;
   border-bottom:1px solid #eee;
 }
-.suggestion:hover{ background:#e8f0fe; }
 
-#buttons{display:flex; flex-wrap:wrap;}
+.suggestion:hover{
+  background:#e8f0fe;
+}
+
+#buttons{
+  display:flex;
+  flex-wrap:wrap;
+}
+
 .letterGroup{margin:4px;}
+
 .letterHeader{
   background:white;
   color:black;
@@ -85,12 +94,14 @@ li{
   border:2px solid #4CAF50;
   border-radius:8px;
 }
+
 .itemRow{
   margin:6px 0;
   display:flex;
   align-items:center;
   justify-content:space-between;
 }
+
 .itemBtn{
   background:white;
   color:black;
@@ -99,13 +110,9 @@ li{
   border:2px solid #2196F3;
   border-radius:10px;
 }
+
 .hidden{display:none;}
 .dragging{opacity:0.5;}
-
-/* 🔥 DROP-ALUE LISTAN LOPPUUN */
-#dropEnd{
-  height:40px;
-}
 </style>
 </head>
 
@@ -122,7 +129,6 @@ li{
 <h3>Ostettavat</h3>
 <button id="clearBtn" class="clearBtn">Tyhjennä lista</button>
 <ul id="list"></ul>
-<div id="dropEnd"></div>
 
 <script type="module">
 
@@ -145,7 +151,7 @@ let items = [];
 let buttons = [];
 let openContent = null;
 
-/* 🔵 RASTI */
+/* 🔵 SININEN RASTI */
 function crossIcon(){
   return `
   <svg class="icon" viewBox="0 0 24 24">
@@ -162,7 +168,7 @@ onSnapshot(collection(db,"pikapainikkeet"), snap=>{
 
 onSnapshot(collection(db,"kauppalista"), snap=>{
   items = snap.docs.map(d=>({id:d.id,...d.data()}));
-  items.sort((a,b)=>(a.order??0)-(b.order??0));
+  items.sort((a,b)=>(a.order ?? 0) - (b.order ?? 0));
   renderList();
 });
 
@@ -171,29 +177,81 @@ input.addEventListener("keypress", e=>{
   if(e.key==="Enter") addItem();
 });
 
-/* --- 🔥 HAE SUURIN ORDER --- */
-function getNextOrder(){
-  if(items.length===0) return 0;
-  return Math.max(...items.map(i=>i.order ?? 0)) + 1;
+/* --- PIKAPAINIKKEET --- */
+function renderButtons(){
+  let box = document.getElementById("buttons");
+  box.innerHTML = "";
+  let groups = {};
+
+  buttons.forEach(b=>{
+    let L = b.nimi.charAt(0).toUpperCase();
+    if(!groups[L]) groups[L] = [];
+    groups[L].push(b);
+  });
+
+  Object.keys(groups).sort().forEach(letter=>{
+    let div = document.createElement("div");
+    div.className = "letterGroup";
+
+    let header = document.createElement("button");
+    header.className = "letterHeader";
+    header.innerText = letter;
+
+    let content = document.createElement("div");
+    content.className = "hidden";
+
+    header.onclick = ()=>{
+      if(openContent && openContent !== content){
+        openContent.classList.add("hidden");
+      }
+      content.classList.toggle("hidden");
+      openContent = content.classList.contains("hidden") ? null : content;
+    };
+
+    groups[letter].sort((a,b)=>a.nimi.localeCompare(b.nimi));
+
+    groups[letter].forEach(obj=>{
+      let row = document.createElement("div");
+      row.className = "itemRow";
+
+      let btn = document.createElement("button");
+      btn.className = "itemBtn";
+      btn.innerText = obj.nimi;
+      btn.onclick = ()=>addItemFromButton(obj.nimi, content);
+
+      let del = document.createElement("button");
+      del.className = "iconBtn";
+      del.innerHTML = crossIcon();
+      del.onclick = ()=>deleteQuickButton(obj.id);
+
+      row.appendChild(btn);
+      row.appendChild(del);
+      content.appendChild(row);
+    });
+
+    div.appendChild(header);
+    div.appendChild(content);
+    box.appendChild(div);
+  });
 }
 
 /* --- DRAG --- */
 function addDragEvents(){
-  const list=document.getElementById("list");
-  let dragging=null;
+  const list = document.getElementById("list");
+  let dragging = null;
 
   list.querySelectorAll("li").forEach(li=>{
     li.addEventListener("dragstart", ()=>{
-      dragging=li;
+      dragging = li;
       li.classList.add("dragging");
     });
 
     li.addEventListener("dragend", async ()=>{
       li.classList.remove("dragging");
 
-      const newOrder=[...list.children];
+      const newOrder = [...list.children];
       for(let i=0;i<newOrder.length;i++){
-        const id=newOrder[i].dataset.id;
+        const id = newOrder[i].dataset.id;
         await updateDoc(doc(db,"kauppalista",id),{order:i});
       }
     });
@@ -201,19 +259,11 @@ function addDragEvents(){
 
   list.addEventListener("dragover", e=>{
     e.preventDefault();
-    const after=getDragAfterElement(list,e.clientY);
+    const after = getDragAfterElement(list,e.clientY);
     if(after==null){
       list.appendChild(dragging);
     } else {
       list.insertBefore(dragging,after);
-    }
-  });
-
-  /* 🔥 DROP LOPPUUN */
-  document.getElementById("dropEnd").addEventListener("dragover", e=>{
-    e.preventDefault();
-    if(dragging){
-      list.appendChild(dragging);
     }
   });
 }
@@ -272,7 +322,7 @@ window.addItem = async ()=>{
 
   await addDoc(collection(db,"kauppalista"),{
     nimi:value,
-    order:getNextOrder() // 🔥 korjaus
+    order:items.length
   });
 
   if(!buttons.map(b=>b.nimi.toLowerCase()).includes(value.toLowerCase())){
@@ -292,7 +342,7 @@ window.addItemFromButton = async (name, contentDiv)=>{
 
   await addDoc(collection(db,"kauppalista"),{
     nimi:name,
-    order:getNextOrder() // 🔥 korjaus
+    order:items.length
   });
 
   if(contentDiv){
@@ -313,6 +363,32 @@ clearBtn.onclick=async ()=>{
   snap.forEach(d=>deleteDoc(doc(db,"kauppalista",d.id)));
 };
 
+/* --- HAKU --- */
+input.addEventListener("input",()=>{
+  let val=input.value.toLowerCase();
+  let box=document.getElementById("suggestions");
+  box.innerHTML="";
+
+  if(val.length<3) return;
+
+  buttons
+    .filter(b=>b.nimi.toLowerCase().startsWith(val))
+    .forEach(m=>{
+      let d=document.createElement("div");
+      d.className="suggestion";
+      d.innerText=m.nimi;
+      d.onclick=()=>{
+        input.value=m.nimi;
+        box.innerHTML="";
+      };
+      box.appendChild(d);
+    });
+});
+
+</script>
+
+</body>
+</html>
 </script>
 
 </body>
