@@ -27,13 +27,8 @@ button{
   background:#2196F3;
   color:white;
 }
-.deleteBtn{
-  margin-left:6px;
-  background:#888;
-}
-.clearBtn{
-  background:#d9534f;
-}
+.clearBtn{ background:#d9534f; }
+
 li{
   background:white;
   margin-top:8px;
@@ -43,6 +38,7 @@ li{
   display:flex;
   justify-content:space-between;
 }
+
 #suggestions{
   background:white;
   border-radius:6px;
@@ -56,7 +52,7 @@ li{
   cursor:pointer;
   border-bottom:1px solid #eee;
 }
-.suggestion:hover{background:#e8f0fe;}
+.suggestion:hover{ background:#e8f0fe; }
 
 #buttons{display:flex; flex-wrap:wrap;}
 .letterGroup{margin:4px;}
@@ -99,10 +95,199 @@ li{
 <ul id="list"></ul>
 
 <script type="module">
-/* ✅ FIREBASE */
+
+/* 🔥 FIREBASE */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
 import {
   getFirestore, collection, addDoc, deleteDoc, doc,
   onSnapshot, getDocs
 } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
 
+const firebaseConfig = {
+  apiKey: "AIzaSyDfXI1zwoyvcaV4HvqBBgqQQODNygiqckQ",
+  authDomain: "kauppalista-360b1.firebaseapp.com",
+  projectId: "kauppalista-360b1",
+  storageBucket: "kauppalista-360b1.firebasestorage.app",
+  messagingSenderId: "531600533067",
+  appId: "1:531600533067:web:036c40e5fdebeeca110fce"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+/* DATA */
+let items = [];
+let buttons = [];
+let openContent = null;
+
+/* 🔥 PIKAPAINIKKEET */
+onSnapshot(collection(db, "pikapainikkeet"), (snapshot) => {
+  buttons = snapshot.docs.map(d => d.data().nimi);
+  renderButtons();
+});
+
+/* 🔥 OSTOSLISTA */
+onSnapshot(collection(db, "kauppalista"), (snapshot) => {
+  items = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+
+  // ✅ TÄRKEÄ: lajittelu TÄÄLLÄ
+  items.sort((a,b)=>a.nimi.localeCompare(b.nimi));
+
+  renderList();
+});
+
+/* 🔥 ENTER = LISÄÄ */
+document.getElementById("input").addEventListener("keypress", function(e){
+  if(e.key === "Enter"){
+    addItem();
+  }
+});
+
+/* 🔥 PIKAPAINIKKEET UI */
+function renderButtons(){
+  let box = document.getElementById("buttons");
+  box.innerHTML = "";
+  let groups = {};
+
+  buttons.forEach(name=>{
+    let letter = name.charAt(0).toUpperCase();
+    if(!groups[letter]) groups[letter] = [];
+    groups[letter].push(name);
+  });
+
+  Object.keys(groups).sort().forEach(letter=>{
+    let groupDiv = document.createElement("div");
+    groupDiv.className = "letterGroup";
+
+    let header = document.createElement("button");
+    header.innerText = letter;
+    header.className = "letterHeader";
+
+    let content = document.createElement("div");
+    content.className = "hidden";
+
+    header.onclick = ()=>{
+      if(openContent && openContent !== content){
+        openContent.classList.add("hidden");
+      }
+      content.classList.toggle("hidden");
+      openContent = content.classList.contains("hidden") ? null : content;
+    };
+
+    groups[letter].sort((a,b)=>a.localeCompare(b));
+
+    groups[letter].forEach(name=>{
+      let row = document.createElement("div");
+      row.className = "itemRow";
+
+      let b = document.createElement("button");
+      b.innerText = name;
+      b.className = "itemBtn";
+      b.onclick = ()=>addItemFromButton(name);
+
+      row.appendChild(b);
+      content.appendChild(row);
+    });
+
+    groupDiv.appendChild(header);
+    groupDiv.appendChild(content);
+    box.appendChild(groupDiv);
+  });
+}
+
+/* 🔥 HAKUEHDOTUKSET */
+document.getElementById("input").addEventListener("input", ()=>{
+  let text = document.getElementById("input").value.trim().toLowerCase();
+  let box = document.getElementById("suggestions");
+  box.innerHTML = "";
+
+  if(text.length < 3) return;
+
+  let matches = buttons.filter(b => 
+    b.toLowerCase().startsWith(text)
+  );
+
+  matches.forEach(m=>{
+    let div = document.createElement("div");
+    div.className = "suggestion";
+    div.innerText = m;
+    div.onclick = ()=>{
+      document.getElementById("input").value = m;
+      box.innerHTML = "";
+    };
+    box.appendChild(div);
+  });
+});
+
+/* 🔥 RENDER LISTA */
+function renderList(){
+  let list = document.getElementById("list");
+  list.innerHTML = "";
+
+  items.forEach((item, index)=>{
+    let li = document.createElement("li");
+
+    let text = document.createElement("span");
+    text.innerText = item.nimi;
+
+    let remove = document.createElement("button");
+    remove.innerText = "🗑️";
+    remove.onclick = ()=>removeItem(index);
+
+    li.appendChild(text);
+    li.appendChild(remove);
+
+    list.appendChild(li);
+  });
+}
+
+/* 🔥 LISÄÄ */
+window.addItem = async function () {
+  const input = document.getElementById("input");
+  const value = input.value.trim();
+  if (!value) return;
+
+  // ❗ estä tuplat
+  const exists = items.some(i => 
+    i.nimi.toLowerCase() === value.toLowerCase()
+  );
+  if (exists) {
+    alert("Tuote on jo listalla!");
+    return;
+  }
+
+  await addDoc(collection(db, "kauppalista"), { nimi: value });
+
+  const existsBtn = buttons.map(b => b.toLowerCase())
+                           .includes(value.toLowerCase());
+
+  if (!existsBtn) {
+    await addDoc(collection(db, "pikapainikkeet"), { nimi: value });
+  }
+
+  input.value = "";
+  document.getElementById("suggestions").innerHTML = "";
+};
+
+/* 🔥 LISÄÄ PIKAPAINIKKEESTA */
+window.addItemFromButton = async function (name) {
+  await addDoc(collection(db, "kauppalista"), { nimi: name });
+};
+
+/* 🔥 POISTA */
+window.removeItem = async function (index) {
+  const item = items[index];
+  await deleteDoc(doc(db, "kauppalista", item.id));
+};
+
+/* 🔥 TYHJENNÄ */
+document.getElementById("clearBtn").onclick = async () => {
+  if (!confirm("Tyhjennetäänkö koko lista?")) return;
+  const snap = await getDocs(collection(db, "kauppalista"));
+  snap.forEach(d => deleteDoc(doc(db, "kauppalista", d.id)));
+};
+
+</script>
+
+</body>
+</html>
